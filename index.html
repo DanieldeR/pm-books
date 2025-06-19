@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM Book Showcase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom toggle switch styles */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4f46e5;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 md:py-12">
+        <header class="text-center mb-8 md:mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">DdeR's PM Book Showcase</h1>
+            <p class="mt-2 text-lg text-gray-600">A curated list of books for Product Managers.</p>
+        </header>
+
+        <!-- Filter Toggle -->
+        <div class="flex items-center justify-center mb-8 md:mb-12">
+            <span class="mr-3 text-sm font-medium text-gray-900">Show All</span>
+            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                <input type="checkbox" name="toggle" id="liked-filter" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                <label for="liked-filter" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+            </div>
+            <span class="ml-3 text-sm font-medium text-gray-900">Show Liked Only ❤️</span>
+        </div>
+
+        <!-- Book Grid -->
+        <main id="book-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-8">
+            <!-- Book cards will be injected here by JavaScript -->
+        </main>
+    </div>
+
+    <script>
+        const bookGrid = document.getElementById('book-grid');
+        const likedFilter = document.getElementById('liked-filter');
+        let allBooks = [];
+
+        /**
+         * Fetches and parses the CSV data from a local file.
+         */
+        async function loadBookData() {
+            try {
+                // Fetch the local CSV file using a relative path.
+                const response = await fetch('./pm-books.csv');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const csvData = await response.text();
+                allBooks = parseCSV(csvData);
+                renderBooks(allBooks);
+            } catch (error) {
+                console.error("Error loading or parsing CSV file:", error);
+                bookGrid.innerHTML = `<p class="text-center col-span-full text-red-500">Could not load book data. Please make sure 'pm-books.csv' is in the same directory.</p>`;
+            }
+        }
+
+        /**
+         * Simple CSV to JSON converter.
+         * Handles quoted fields and various line endings.
+         */
+        function parseCSV(csv) {
+            const lines = csv.trim().split(/\r?\n/);
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                 // More robust CSV parsing to handle commas in book titles/authors
+                const regex = /(?:^|,)(\"(?:[^\"]+|\"\")*\"|[^,]*)/g;
+                let values = [];
+                let match;
+                while (match = regex.exec(lines[i])) {
+                    let value = match[1];
+                    // Remove quotes if they exist
+                    if (value.startsWith('"') && value.endsWith('"')) {
+                        value = value.substring(1, value.length - 1).replace(/""/g, '"');
+                    }
+                    values.push(value.trim());
+                }
+
+                if (values.length === headers.length) {
+                    const obj = {};
+                    for (let j = 0; j < headers.length; j++) {
+                        const header = headers[j];
+                        let value = values[j];
+                        if (header === 'Liked?') {
+                            obj[header] = (value.toLowerCase() === 'true');
+                        } else {
+                            obj[header] = value;
+                        }
+                    }
+                    data.push(obj);
+                }
+            }
+            return data;
+        }
+
+
+        /**
+         * Renders the books on the page.
+         * @param {Array} booksToRender - The array of book objects to display.
+         */
+        function renderBooks(booksToRender) {
+            bookGrid.innerHTML = ''; // Clear existing books
+            booksToRender.forEach(book => {
+                const imageUrl = book['Cover_URL'] || `https://placehold.co/400x600/e2e8f0/4a5568?text=${encodeURIComponent(book.Book)}`;
+                const placeholderImageUrl = `https://placehold.co/400x600/e2e8f0/4a5568?text=Not+Found`;
+                const amazonUrl = book['Amazon'];
+
+                const cardContent = `
+                    <div class="aspect-[2/3] w-full bg-gray-200 rounded-lg overflow-hidden shadow-lg transform group-hover:scale-105 transition-transform duration-300 ease-in-out">
+                         <img src="${imageUrl}" alt="Cover for ${book.Book}" class="w-full h-full object-cover object-center" onerror="this.onerror=null;this.src='${placeholderImageUrl}';">
+                    </div>
+                    ${book['Liked?'] ? '<div class="absolute top-2 right-2 text-2xl">❤️</div>' : ''}
+                    <div class="mt-4 text-center">
+                        <h3 class="text-sm font-semibold text-gray-800">${book.Book}</h3>
+                        <p class="mt-1 text-xs text-gray-500">${book.Author}</p>
+                    </div>
+                `;
+
+                let finalCardHtml;
+                // Check if the Amazon URL is valid before creating a link
+                if (amazonUrl && amazonUrl.startsWith('http')) {
+                    finalCardHtml = `<a href="${amazonUrl}" target="_blank" rel="noopener noreferrer" class="group relative block">${cardContent}</a>`;
+                } else {
+                    finalCardHtml = `<div class="group relative">${cardContent}</div>`;
+                }
+                
+                bookGrid.innerHTML += finalCardHtml;
+            });
+        }
+
+        /**
+         * Filters and re-renders the book list based on the toggle state.
+         */
+        function handleFilterChange() {
+            if (likedFilter.checked) {
+                const likedBooks = allBooks.filter(book => book['Liked?']);
+                renderBooks(likedBooks);
+            } else {
+                renderBooks(allBooks);
+            }
+        }
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            loadBookData();
+            likedFilter.addEventListener('change', handleFilterChange);
+        });
+    </script>
+</body>
+</html>
